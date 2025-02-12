@@ -1,0 +1,151 @@
+---
+title: "The Effect of Relious Affiliation on Political Beliefs"
+author: "Yun-Tsz Tsai"
+format: pdf
+editor: visual
+---
+
+# Introduction
+
+This study aims to explore the relationship between religious beliefs and voting behavior. The data being used is from General Social Survey in 2016, which contains 2538 samples and 26 variables.
+
+What will be examine in the analysis is whether religious affiliation affect the possibility of individuals voting for Barack Obama, the candidate from Democratic Party. Traditionally, Democrats are associated with relatively liberal values and it is therefore reasonable to assume that there might be a correlation between individuals' political stance and religious beliefs, which are usually an indicator of the former.
+
+To see how religions interact with voting behavior, I start with the data in 2016 and verify my hypothesis using data in 2012.
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+library(tidyverse)
+library(socviz)
+library(dplyr)
+library(modelsummary)
+library(broom)
+```
+
+```{r}
+#| echo: false
+#| warning: false
+# load the data
+gss <- gss_sm
+# str(gss)
+```
+
+
+```{r}
+#| echo: false
+#| warning: false
+# handling religios categories 
+gss <- gss %>% 
+  mutate(religion = case_when(
+    religion == 'Jewish' ~ 'Other',
+    TRUE ~ as.factor(religion)
+  ))
+# turn 'religion' into a factor variable
+gss$religion <- as.factor(gss$religion)
+
+# forceing R to use 'None' as reference level
+gss <- within(gss, religion <- relevel(religion, ref = 'None'))
+
+# handling income variables
+gss <- gss %>% 
+   mutate(
+    income_rc_char = as.character(income_rc),  # turn the factor into character 
+    income_rc_char = na_if(income_rc_char, "NA"),  # keep NAs
+    income_rc_char = as.numeric(str_remove_all(income_rc_char, "[$,Gt ]"))
+  )  %>%
+  mutate(income_rc = case_when(
+    income_rc_char < 25000 ~ 'low',
+    income_rc_char < 130000 ~ 'middle',
+    income_rc_char > 130000 ~ 'high'
+  ))
+# extracting all the categories (for checking)
+# for (i in as.factor(unique(gss$income_rc))){
+#   print(i)
+# }
+# for (j in as.factor(unique(gss$religion))){
+#   print(j)
+# }
+
+```
+# Descriptive table on sample attributes
+The original dataset contains 33 variables and 2867 observations. 
+However, after ruling out obervations with missing values, there are 1522 obervations and 4 attributes, sex, income, religion and age are used to conduct this analysis. 
+The religion variable contains 4 categories, with Jewish being clustered into `Other`. The income variable is a nominal variable with three levels. Individuals are labeled based on the reported income.
+The table illustrates individual level attributes and the results are group by their votes. Approximately 63% of the observations voted for Obama and on all recorded attributes, the number of individuals voting for Obama is higher than that of those who did not. 
+Interestingly, the ratios of sex among non-Obama voters is rather balanced while among Obama voters, we see ~ 12% more female voters.
+
+```{r}
+#| echo: false
+#| warning: false
+# subset the data and remove observations with missing values 
+gss_filtered <- gss %>% 
+  select(c(age, sex, religion, income_rc, obama)) %>% 
+  drop_na()
+
+# rename the column
+gss_filtered <- rename(gss_filtered, income = income_rc)
+
+# creating a table
+datasummary((`Age` = age) + (`Sex` = sex) + 
+                (`Religion` = religion) + (`Income` = income) + 1 
+              ~ obama * (mean + SD + Percent()), 
+              data = gss_filtered %>% 
+                mutate(obama = factor(obama, levels = c(0, 1),
+                          labels = c("Non-Obama Voters", "Obama Voters"))))
+```
+
+# Logistic regression
+
+In this section, I constructed three logistic regression models. Firstly, in Model A, there is religion as the only variable. None is used as the reference category, and this is the same for Model B and Model C. Figures in the table is presented in odd ratios. At first glance, it seems that both Catholic and Protestant are less likely to vote for Obama compared to individuals without any religious affiliation.
+
+In Model B, income is added as another independent variable. The coefficient for Catholic remains the same as in Model A but the coefficient for Protestant decreases slightly from 0.28 to 0.26. Individuals with low and middle income are more likely to vote for Obama compared to individuals with high income.
+
+Finally, I added sex and age into the model and the results are shown under the column Model C. Similar to the results obtained from Model B, the coefficient does not change at all for Catholic. The coefficient for Protestant and dropped slightly while the coefficients for individuals with both income categories increased. The increase is noticeable with individuals with low income. Compared to men, women are more likely to vote for Obama. As for the age effect of voting for Obama, there is not significant difference across individuals at different ages.
+
+```{r}
+#| echo: false
+#| warning: false
+# model a, only religion as an independent variable
+md_a <- glm(obama ~ religion, data = gss_filtered, 
+            family = 'binomial'(link = 'logit'))
+# add household income as an independent variable
+md_b <- glm(obama ~ religion + income, data = gss_filtered,
+            family = 'binomial'(link = 'logit'))
+# add sex and age as independent variables
+md_c <- glm(obama ~ religion + income + sex + age, 
+            data = gss_filtered, 
+            family = 'binomial'(link = 'logit'))
+md_lst <- list('Model A'= md_a, 'Model B' = md_b, 'Model C' = md_c)
+
+
+# making a table containing OR and conf int
+modelsummary(md_lst, fmt = 2,
+             stars = TRUE,
+             exponentiate = TRUE,
+             coef_rename = c('Intercept', 'Catholic', 'Other',
+                             'Protestant', 'Low Income',
+                             'Middle Income', 'Female', 'Age'),
+             gof_omit = 'F|RMSE',
+             title = 'Probabillity of Voting for Obama',
+             notes = list('Income','low: < $25000', 'middle: $25000~ $129999', 'high: > 130000'))
+
+# a graph illustrating the OR from model 3
+estimates <- tidy(md_c, exponentiate = TRUE, conf.int = TRUE)
+estimates %>% 
+  filter(term != '(Intercept)') %>% 
+  mutate(term = recode(term, 
+                       'religionCatholic' = 'Catholic',
+                       'religionOther'= 'Other',
+                       'religionProtestant' = 'Protestant',
+                       'incomelow' = 'Low Income',
+                       'incomemiddle' = 'Middle Income',
+                       'sexFemale' = 'Female',
+                       'age' = 'Age')) %>% 
+  ggplot(aes(term, estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high, width = .1)) + labs(title = 'Estimated Odds Ratios from Model 3',
+       y = 'Odds Ratio', x = 'Variables'                                                                    ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
