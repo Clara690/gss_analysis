@@ -1,5 +1,6 @@
 ---
-title: "The Effect of Relious Affiliation on Political Beliefs"
+title: "The Effect of Religious Affiliation on   
+Political Beliefs"
 author: "Yun-Tsz Tsai"
 format: pdf
 editor: visual
@@ -9,9 +10,12 @@ editor: visual
 
 This study aims to explore the relationship between religious beliefs and voting behavior. The data being used is from General Social Survey in 2016, which contains 2538 samples and 26 variables.
 
-What will be examine in the analysis is whether religious affiliation affect the possibility of individuals voting for Barack Obama, the candidate from Democratic Party. Traditionally, Democrats are associated with relatively liberal values and it is therefore reasonable to assume that there might be a correlation between individuals' political stance and religious beliefs, which are usually an indicator of the former.
+What will be examine in the analysis is whether religious affiliation affect the possibility of individuals voting for Barack Obama, the candidate from Democratic Party. Traditionally, Democrats are associated with relatively liberal values and it is therefore reasonable to assume that there might be a correlation between individuals' political stance and religious beliefs, which are usually an indicator of the former. 
+In addition to religion, recent studies suggest that women are more liberal in terms of their political ideology. Therefore, I propose two hypotheses as follows:  
+ 1) Individuals with less religious affiliation are more likely to support candidates from a more liberal party (In this study, Obama)  
+ 2) Women are more likely to support candidates from a more liberal party.  
 
-To see how religions interact with voting behavior, I start with the data in 2016 and verify my hypothesis using data in 2012.
+To see how religions and sex interact with voting behavior, I start with the data in 2016 and verify my hypothesis using the same dataset.
 
 ```{r}
 #| echo: false
@@ -22,6 +26,10 @@ library(socviz)
 library(dplyr)
 library(modelsummary)
 library(broom)
+library(scales)
+library(DescTools)
+library(lmtest)
+library(gt) # for makeing graph and table
 ```
 
 ```{r}
@@ -69,7 +77,7 @@ gss <- gss %>%
 # }
 
 ```
-# Descriptive table on sample attributes
+# Descriptive Table on Sample Attributes
 The original dataset contains 33 variables and 2867 observations. 
 However, after ruling out obervations with missing values, there are 1522 obervations and 4 attributes, sex, income, religion and age are used to conduct this analysis. 
 The religion variable contains 4 categories, with Jewish being clustered into `Other`. The income variable is a nominal variable with three levels. Individuals are labeled based on the reported income.
@@ -94,15 +102,16 @@ datasummary((`Age` = age) + (`Sex` = sex) +
               data = gss_filtered %>% 
                 mutate(obama = factor(obama, levels = c(0, 1),
                           labels = c("Non-Obama Voters", "Obama Voters"))))
+?datasummary()
 ```
 
-# Logistic regression
+# Logistic Regression
 
 In this section, I constructed three logistic regression models. Firstly, in Model A, there is religion as the only variable. None is used as the reference category, and this is the same for Model B and Model C. Figures in the table is presented in odd ratios. At first glance, it seems that both Catholic and Protestant are less likely to vote for Obama compared to individuals without any religious affiliation.
 
 In Model B, income is added as another independent variable. The coefficient for Catholic remains the same as in Model A but the coefficient for Protestant decreases slightly from 0.28 to 0.26. Individuals with low and middle income are more likely to vote for Obama compared to individuals with high income.
 
-Finally, I added sex and age into the model and the results are shown under the column Model C. Similar to the results obtained from Model B, the coefficient does not change at all for Catholic. The coefficient for Protestant and dropped slightly while the coefficients for individuals with both income categories increased. The increase is noticeable with individuals with low income. Compared to men, women are more likely to vote for Obama. As for the age effect of voting for Obama, there is not significant difference across individuals at different ages.
+Finally, I added sex and age into the model and the results are shown under the column Model C. Similar to the results obtained from Model B, the coefficient does not change at all for Catholic. The coefficient for Protestant and dropped slightly while the coefficients for individuals with both income categories increased. The increase is noticeable with individuals with low income. Compared to men, women are more likely to vote for Obama. As for the age effect of voting for Obama, for every one-year increase in age, one becomes less likely to vote for Obama.
 
 ```{r}
 #| echo: false
@@ -145,7 +154,134 @@ estimates %>%
                        'age' = 'Age')) %>% 
   ggplot(aes(term, estimate)) +
   geom_point() +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high, width = .1)) + labs(title = 'Estimated Odds Ratios from Model 3',
-       y = 'Odds Ratio', x = 'Variables'                                                                    ) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high, width = .1)) + labs(title = 'Figure 1:  Estimated Odds Ratios from Model C',
+       y = 'Odds Ratio', x = 'Variables') +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
+# Predicted Probability
+For the purspose of demonstration, `Figure 2` shows the predicted values of a female with middle income voting for Obama. The overall tread reamins roughly consistant for all religion categories. Older females are less likely to vote for Obama, and among all religions, Protestant are least likely to vote for Obama. 
+As mentioned earlier, religion might be a proxy for one's political ideology. Take Christianity for example, Catholics are relatively more on the conservative end while Protestants are more on the liberal end. Thus, it seems completely reasonalble to anticipate that being a Protestant makes someone more likely to vote for Obama. However, the predicted results show the opposite. 
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+library(modelr)
+# predicted probability of a female with middle income voting for Obama
+# get all combinations type = df
+female_mid <- expand_grid(religion = c('None', 'Catholic', 
+                         'Protestant', 'Other'),
+            age = seq(21, 89),
+            sex = 'Female',
+            income = 'middle') 
+# make the prediction &
+predicted_values <- predict(md_c, newdata = female_mid, 
+                      type = 'response', se.fit = TRUE)
+
+# combine the predicted values with the origianl df
+female_mid <- bind_cols(female_mid, as_tibble(predicted_values))
+
+female_mid %>% 
+  mutate(lower = fit - 1.96 * se.fit,
+         upper = fit + 1.96 * se.fit) %>% 
+ggplot(aes(x= age, y = fit, color = religion, fill = religion)) + 
+  geom_line() +
+  scale_y_continuous(labels = percent_format()) + 
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.1) +
+  labs(title = 'Figure 2: Probability of A Female with Middle Income
+       Voting for Obama ',
+       subtitle = 'Results from Model C',
+       x = 'Age',
+       y = 'Predicted Value',
+       caption = 'The shadow around the line indicats the confidence interval')
+
+```
+# Model Fit
+In total, there are three models in this article, Model A, Model B and Model C. Model A is nested in Model B and Model B is nested in Model C. In the following section, I will examine the goodness of fit of the models by looking at three aspects, namely **likelihood ratio test**, **Negelkerke's pseuso's $R^2$** and **the share of observations correctly predicted by the models**.
+
+## Likelihood Ratio Test 
+The test is based on comapring two model and the the model being compared is the one that entails the other. The null hypothese is the two model being compared are the same in terms of their ability to predict the data. When comparing Model B to Model A and Model C to Model B, both results are statistically significant, indicating that the former is better than the latter. 
+
+## Pseudo $R^2$
+The idea of Rsedo $R^2$ is similar to $R^2$ used to evaluate linear regression model. There are more than one type of pseudo $R^2$ and the pseudo $R^2$ used in this article is the one by Nagelkerke. The value can range from 0 to 1, with higher valuing suggesting better performance of the model on prediction. In this study, Model C has the highest score among the three models.
+
+## Share of Correct Prediction
+Share of correct predition is calculated as the following equation shows:  
+$P = \frac{the number of correct prediction}{total of observation}$  
+Model C has the best performance on predicting outcomes.
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+# likelihood ratio test
+  # compare model b to model a
+lr_a_to_b <- lrtest(md_a, md_b)
+  # compare model c to model b
+lr_b_to_c <- lrtest(md_b, md_c)
+
+# Negelkerke's pseuso's R^2
+pse_a <- round(PseudoR2(md_a, which = 'Nagelkerke'), 2)
+pse_b <- round(PseudoR2(md_b, which = 'Nagelkerke'), 2)
+pse_c <- round(PseudoR2(md_c, which = 'Nagelkerke'), 2)
+
+#the share of observations correctly predicted 
+# Model A
+md_a_pred <- augment(md_a,
+                     type.predict = 'response') %>% 
+                    mutate(.pred = .fitted > 0.5)
+share_md_a <- round(mean(md_a_pred$obama 
+                   == md_a_pred$.pred) * 100, 2)
+# Model B
+md_b_pred <- augment(md_b,
+                     type.predict = 'response') %>% 
+                    mutate(.pred =.fitted > 0.5)
+share_md_b <- round(mean(md_b_pred$obama 
+                         == md_b_pred$.pred) * 100, 2)
+# Model C
+md_c_pred <- augment(md_c,
+                     type.predict = 'response') %>% 
+                    mutate(.pred = .fitted > 0.5)
+share_md_c <- round(mean(md_c_pred$obama 
+                         == md_c_pred$.pred) * 100, 2)
+
+# table
+results <- tibble('term' = c('Likelihood Ratio Test', 
+                      'Pseuso R²', 
+                      'Share of Correct Prediction (%)'), 
+                  'Model A' = c(NA, pse_a, share_md_a),
+                  'Model B' = c(lr_a_to_b$Chisq[2], pse_b,
+                                share_md_b),
+                  'Model C' = c(lr_b_to_c$Chisq[2], pse_c,
+                                share_md_c))
+results %>% 
+  gt() %>% 
+  tab_header(
+    title = md('**Table 3** Model Evaluation')
+  ) %>% 
+  fmt_number(
+    columns = c('Model A', 'Model B', 'Model C'),
+    decimal = 2
+  ) %>% 
+  cols_label(
+    term = 'Metrics',
+    `Model A` = 'Model A',
+    `Model B` = 'Model B',
+    `Model C` = 'Model C'
+  ) %>% 
+  cols_align(
+    align = 'center',
+    columns = everything()
+  ) %>% 
+  tab_footnote('The Likelihood ratio test for Model is not applicable as it is the most basic model in this analysis.\n*** P < 0.01') %>% 
+  text_transform(
+    locations = cells_body(
+      columns = c(`Model B`, `Model C`),
+      rows = term == "Likelihood Ratio Test"
+    ),
+    fn = function(x) paste0(x, '***')
+  )
+
+```
+# Conclusion 
+The impact of religion remain prevelant in all the models. Except for religion, sex, income and age also appear to affect one's voting behavior. Among those, individuals with low income are much more likely to vote for Obama.
+However, the difference between Catholics and Protestants, despite both being statistically significant, and its impact on voting behavior is realtively small compared to other variables being investigated in this essay. Further studies is needed to clarify the relatioship between religion and actual voting behavior.
