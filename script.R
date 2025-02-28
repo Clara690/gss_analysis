@@ -1,26 +1,3 @@
----
-title: "The Effect of Religious Affiliation on   
-Political Beliefs"
-author: Yun-Tsz Tsai
-date-format: "MMMM DD, YYYY"
-format: pdf
-editor: visual
----
-
-# Introduction
-
-This study aims to explore the relationship between religious beliefs and voting behavior. The data being used is from General Social Survey in 2016, which contains 2538 samples and 26 variables.
-
-What will be examine in the analysis is whether religious affiliation affect the possibility of individuals voting for Barack Obama, the candidate from Democratic Party. Traditionally, Democrats are associated with relatively liberal values and it is therefore reasonable to assume that there might be a correlation between individuals' political stance and religious beliefs, which are usually an indicator of the former. In addition to religion, recent studies suggest that women are more liberal in terms of their political ideology. Therefore, I propose two hypotheses as follows:\
-1) Individuals with less religious affiliation are more likely to support candidates from a more liberal party (In this study, Obama)\
-2) Women are more likely to support candidates from a more liberal party.
-
-To see how religions and sex interact with voting behavior, I start with the data in 2016 and verify my hypothesis using the same dataset.
-
-```{r}
-#| echo: false
-#| warning: false
-#| message: false
 library(tidyverse)
 library(socviz)
 library(dplyr)
@@ -57,7 +34,7 @@ gss <- within(gss, religion <- relevel(religion, ref = 'None'))
 
 # handling income variables
 gss <- gss %>% 
-   mutate(
+  mutate(
     income_rc_char = as.character(income_rc),  # turn the factor into character 
     income_rc_char = na_if(income_rc_char, "NA"),  # keep NAs
     income_rc_char = as.numeric(str_remove_all(income_rc_char, "[$,Gt ]"))
@@ -94,11 +71,11 @@ gss_filtered <- rename(gss_filtered, income = income_rc)
 
 # creating a table
 datasummary((`Age` = age) + (`Sex` = sex) + 
-                (`Religion` = religion) + (`Income` = income) + 1 
-              ~ obama * (mean + SD + Percent()), 
-              data = gss_filtered %>% 
-                mutate(obama = factor(obama, levels = c(0, 1),
-                          labels = c("Non-Obama Voters", "Obama Voters"))))
+              (`Religion` = religion) + (`Income` = income) + 1 
+            ~ obama * (mean + SD + Percent()), 
+            data = gss_filtered %>% 
+              mutate(obama = factor(obama, levels = c(0, 1),
+                                    labels = c("Non-Obama Voters", "Obama Voters"))))
 ```
 
 # Logistic Regression
@@ -151,7 +128,7 @@ estimates %>%
   ggplot(aes(term, estimate)) +
   geom_point() +
   geom_errorbar(aes(ymin = conf.low, ymax = conf.high, width = .1)) + labs(title = 'Figure 1:  Estimated Odds Ratios from Model C',
-       y = 'Odds Ratio', x = 'Variables') +
+                                                                           y = 'Odds Ratio', x = 'Variables') +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
@@ -163,10 +140,6 @@ For the purspose of demonstration, `Figure 2` shows the predicted values of a fe
 #| echo: false
 #| warning: false
 #| message: false
-#| fig-align: 'center'
-#| fig-cap-location: top
-#| fig-cap: 'Predictied Probability of A Women Voting for Obama in 2016 Prsidential Election by Religion'
-#| label: fig-pred-graph
 library(modelr)
 # predicted probability of a female with middle income voting for Obama
 # get all combinations type = df
@@ -187,13 +160,14 @@ female_mid %>%
          upper = fit + 1.96 * se.fit) %>% 
 ggplot(aes(x= age, y = fit, color = religion, fill = religion)) + 
   geom_line() +
-  theme_light() +
   scale_y_continuous(labels = percent_format()) + 
-  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.1, color = NA) +
-  labs(subtitle = 'Results from Model C',
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.1) +
+  labs(title = 'Figure 2: Probability of A Female with Middle Income
+Voting for Obama ',
+       subtitle = 'Results from Model C',
        x = 'Age',
        y = 'Predicted Value',
-       caption = 'The shadow around the line indicats the confidence interval.')
+       caption = 'The shadow around the line indicats the confidence interval')
 
 ```
 
@@ -220,9 +194,9 @@ Model C has the best performance on predicting outcomes.
 #| warning: false
 #| message: false
 # likelihood ratio test
-  # compare model b to model a
+# compare model b to model a
 lr_a_to_b <- lrtest(md_a, md_b)
-  # compare model c to model b
+# compare model c to model b
 lr_b_to_c <- lrtest(md_b, md_c)
 
 # Negelkerke's pseuso's R^2
@@ -234,26 +208,26 @@ pse_c <- round(PseudoR2(md_c, which = 'Nagelkerke'), 2)
 # Model A
 md_a_pred <- augment(md_a,
                      type.predict = 'response') %>% 
-                    mutate(.pred = .fitted > 0.5)
+  mutate(.pred = .fitted > 0.5)
 share_md_a <- round(mean(md_a_pred$obama 
-                   == md_a_pred$.pred) * 100, 2)
+                         == md_a_pred$.pred) * 100, 2)
 # Model B
 md_b_pred <- augment(md_b,
                      type.predict = 'response') %>% 
-                    mutate(.pred =.fitted > 0.5)
+  mutate(.pred =.fitted > 0.5)
 share_md_b <- round(mean(md_b_pred$obama 
                          == md_b_pred$.pred) * 100, 2)
 # Model C
 md_c_pred <- augment(md_c,
                      type.predict = 'response') %>% 
-                    mutate(.pred = .fitted > 0.5)
+  mutate(.pred = .fitted > 0.5)
 share_md_c <- round(mean(md_c_pred$obama 
                          == md_c_pred$.pred) * 100, 2)
 
 # table
 results <- tibble('term' = c('Likelihood Ratio Test', 
-                      'Pseuso R²', 
-                      'Share of Correct Prediction (%)'), 
+                             'Pseuso R²', 
+                             'Share of Correct Prediction (%)'), 
                   'Model A' = c(NA, pse_a, share_md_a),
                   'Model B' = c(lr_a_to_b$Chisq[2], pse_b,
                                 share_md_b),
@@ -285,10 +259,3 @@ results %>%
       rows = term == "Likelihood Ratio Test"
     ),
     fn = function(x) paste0(x, '***')
-  )
-
-```
-
-# Conclusion
-
-The impact of religion remain prevelant in all the models. Except for religion, sex, income and age also appear to affect one's voting behavior. Among those, individuals with low income are much more likely to vote for Obama. However, the difference between Catholics and Protestants, despite both being statistically significant, and its impact on voting behavior is realtively small compared to other variables being investigated in this essay. Further studies is needed to clarify the relatioship between religion and actual voting behavior.
